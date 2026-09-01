@@ -4,7 +4,7 @@
  * live in IndexedDB, which is where the import step puts them.
  */
 
-const CACHE = 'assimil-player-v6';
+const CACHE = 'assimil-player-v7';
 
 const SHELL = [
   './',

@@ -89,14 +89,14 @@ async function init() {
   const repeat = await getSetting('repeat', '1');
   player.setRepeat(parseRepeat(repeat));
   player.setBreakSeconds(Number(await getSetting('breakSeconds', 0)));
-  $('#repeat').value = String(repeat);
-  $('#break-seconds').value = String(player.breakSeconds);
-  $('#rate').value = String(rate);
-  $('#back-seconds').value = String(player.backSeconds);
-  $('#forward-seconds').value = String(player.forwardSeconds);
-  $('#auto-advance').checked = player.autoAdvance;
+  setControl('#repeat', String(repeat));
+  setControl('#break-seconds', String(player.breakSeconds));
+  setControl('#rate', String(rate));
+  setControl('#back-seconds', String(player.backSeconds));
+  setControl('#forward-seconds', String(player.forwardSeconds));
+  setControl('#sleep-minutes', '0');
+  setControl('#auto-advance', player.autoAdvance, 'checked');
   updateSkipLabels();
-
   wireEvents();
   applyPlatformCapabilities();
   player.onChange(renderPlayerState);
@@ -115,9 +115,38 @@ async function init() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return; // service workers need http(s)
+
+  // When an updated worker takes over, the page may still be running the
+  // previous version's code. Reloading once puts the markup and the scripts
+  // back in step. The flag stops this from looping.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+
   navigator.serviceWorker.register('sw.js').catch((error) => {
     console.warn('Offline cache unavailable:', error);
   });
+}
+
+/**
+ * Sets a form control's value if that control exists.
+ *
+ * During an update the browser can briefly pair new markup with older scripts.
+ * Skipping absent controls keeps the app usable through that moment instead of
+ * failing to start.
+ */
+function setControl(selector, value, property = 'value') {
+  const element = $(selector);
+  if (element) element[property] = value;
+}
+
+/** Attaches a listener when the element is present, for the same reason. */
+function on(selector, type, handler) {
+  const element = $(selector);
+  if (element) element.addEventListener(type, handler);
 }
 
 /** The repeat menu stores "inf" for endless looping, otherwise a count. */
@@ -393,23 +422,27 @@ function renderPlayerState(snapshot, extra) {
   const badge = $('#repeat-badge');
   const { repeatTarget, repeatPass, breaking, breakRemaining } = snapshot;
   const showBadge = Boolean(track) && (repeatTarget > 1 || breaking);
-  badge.classList.toggle('hidden', !showBadge);
-  badge.classList.toggle('is-break', Boolean(breaking));
-  if (showBadge) {
-    if (breaking) {
-      badge.textContent = `Break · next play in ${breakRemaining}s`;
-    } else {
-      badge.textContent = repeatTarget === Infinity
-        ? `Repeating · play ${repeatPass}`
-        : `Play ${repeatPass} of ${repeatTarget}`;
+  if (badge) {
+    badge.classList.toggle('hidden', !showBadge);
+    badge.classList.toggle('is-break', Boolean(breaking));
+    if (showBadge) {
+      if (breaking) {
+        badge.textContent = `Break · next play in ${breakRemaining}s`;
+      } else {
+        badge.textContent = repeatTarget === Infinity
+          ? `Repeating · play ${repeatPass}`
+          : `Play ${repeatPass} of ${repeatTarget}`;
+      }
     }
   }
 
   const sleepBadge = $('#sleep-badge');
   const showSleep = snapshot.sleepRemainingMs > 0;
-  sleepBadge.classList.toggle('hidden', !showSleep);
-  if (showSleep) {
-    sleepBadge.textContent = `Sleep in ${formatTime(snapshot.sleepRemainingMs / 1000)}`;
+  if (sleepBadge) {
+    sleepBadge.classList.toggle('hidden', !showSleep);
+    if (showSleep) {
+      sleepBadge.textContent = `Sleep in ${formatTime(snapshot.sleepRemainingMs / 1000)}`;
+    }
   }
 
   $('#time-current').textContent = formatTime(currentTime);
@@ -422,8 +455,8 @@ function renderPlayerState(snapshot, extra) {
 
   if (extra?.loadError) toast(extra.loadError);
   if (extra?.sleepFired) {
-    $('#sleep-minutes').value = '0';
-    $('#sleep-badge').classList.add('hidden');
+    setControl('#sleep-minutes', '0');
+    $('#sleep-badge')?.classList.add('hidden');
     toast('Sleep timer finished — playback stopped.');
   }
 
@@ -556,25 +589,25 @@ function wireEvents() {
       : target === 1 ? 'Repeat off.'
       : `This lesson will play ${target} times in a row.`);
   });
-  $('#back-seconds').addEventListener('change', (event) => {
+  on('#back-seconds', 'change', (event) => {
     const value = Number(event.target.value);
     player.setBackSeconds(value);
     setSetting('backSeconds', value);
     updateSkipLabels();
   });
-  $('#forward-seconds').addEventListener('change', (event) => {
+  on('#forward-seconds', 'change', (event) => {
     const value = Number(event.target.value);
     player.setForwardSeconds(value);
     setSetting('forwardSeconds', value);
     updateSkipLabels();
   });
-  $('#break-seconds').addEventListener('change', (event) => {
+  on('#break-seconds', 'change', (event) => {
     const value = Number(event.target.value);
     player.setBreakSeconds(value);
     setSetting('breakSeconds', value);
     toast(value ? `${value} second break between repeats.` : 'No break between repeats.');
   });
-  $('#sleep-minutes').addEventListener('change', (event) => {
+  on('#sleep-minutes', 'change', (event) => {
     const value = Number(event.target.value);
     player.setSleepMinutes(value);
     toast(value
@@ -718,8 +751,8 @@ function updateSkipLabels() {
   for (const label of document.querySelectorAll('[data-forward-label]')) {
     label.textContent = String(player.forwardSeconds);
   }
-  $('#btn-back').setAttribute('aria-label', `Skip back ${player.backSeconds} seconds`);
-  $('#btn-forward').setAttribute('aria-label', `Skip forward ${player.forwardSeconds} seconds`);
+  $('#btn-back')?.setAttribute('aria-label', `Skip back ${player.backSeconds} seconds`);
+  $('#btn-forward')?.setAttribute('aria-label', `Skip forward ${player.forwardSeconds} seconds`);
 }
 
 async function openCourseDialog(course = null) {
