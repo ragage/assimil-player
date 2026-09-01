@@ -35,6 +35,7 @@ export class Player {
     this.audio.addEventListener('timeupdate', () => {
       this._maybeMarkPlayed();
       this._throttledSave();
+      this._updatePositionState();
       this._emit();
     });
     this.audio.addEventListener('loadedmetadata', () => {
@@ -43,11 +44,20 @@ export class Player {
         setTrackDuration(track.id, this.audio.duration).catch(() => {});
         track.duration = track.duration || this.audio.duration;
       }
+      this._updatePositionState();
       this._emit();
     });
-    this.audio.addEventListener('play', () => { this._updateMediaSession(); this._emit(); });
-    this.audio.addEventListener('pause', () => { this._flushProgress(); this._emit(); });
-    this.audio.addEventListener('ratechange', () => this._emit());
+    this.audio.addEventListener('play', () => {
+      this._updateMediaSession();
+      this._setPlaybackState('playing');
+      this._emit();
+    });
+    this.audio.addEventListener('pause', () => {
+      this._flushProgress();
+      this._setPlaybackState('paused');
+      this._emit();
+    });
+    this.audio.addEventListener('ratechange', () => { this._updatePositionState(); this._emit(); });
     this.audio.addEventListener('ended', () => this._onEnded());
     this.audio.addEventListener('error', () => this._emit());
 
@@ -150,6 +160,7 @@ export class Player {
       this.objectUrl = null;
     }
     this.index = -1;
+    this._setPlaybackState('none');
     this._emit();
   }
 
@@ -313,6 +324,29 @@ export class Player {
   setArtwork(url) {
     this.artworkUrl = url || null;
     this._updateMediaSession();
+  }
+
+  /** Keeps the notification's play/pause button in step with the audio. */
+  _setPlaybackState(playbackState) {
+    if (!('mediaSession' in navigator)) return;
+    try { navigator.mediaSession.playbackState = playbackState; } catch { /* ignore */ }
+  }
+
+  /**
+   * Publishes the current position so the notification and lock screen can show
+   * a progress bar and let the listener scrub without opening the app.
+   */
+  _updatePositionState() {
+    if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+    const duration = this.audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: this.audio.playbackRate || 1,
+        position: Math.min(Math.max(0, this.audio.currentTime || 0), duration),
+      });
+    } catch { /* ignore */ }
   }
 
   _updateMediaSession() {
