@@ -53,7 +53,7 @@ export async function importFiles(courseId, fileList, onProgress) {
       courseId,
       title: titleFromFileName(file.name),
       fileName: file.name,
-      blob: file,
+      blob: await detachFromDisk(file),
       size: file.size,
       mimeType: file.type || 'audio/mpeg',
       duration: null,
@@ -64,6 +64,19 @@ export async function importFiles(courseId, fileList, onProgress) {
   }
 
   return { added, skipped: files.length - added.length, considered: files.length };
+}
+
+/**
+ * Copies the picked file's bytes into a standalone Blob.
+ *
+ * A `File` from the picker is only a handle on something still sitting on the
+ * device's storage. Storing it directly means the lesson stops playing the
+ * moment the original is moved or deleted, so the bytes are read out and kept
+ * independently instead. This is what makes the import a genuine copy.
+ */
+async function detachFromDisk(file) {
+  const bytes = await file.arrayBuffer();
+  return new Blob([bytes], { type: file.type || 'audio/mpeg' });
 }
 
 function relPath(file) {

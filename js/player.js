@@ -16,6 +16,41 @@ import {
 
 const PLAYED_THRESHOLD = 0.94; // 94% listened counts as "played"
 
+/**
+ * Builds a silent WAV of the requested length.
+ *
+ * The break between repeats is timed by *playing* this silence rather than by
+ * a JavaScript timer. Phones throttle timers heavily once the screen goes off,
+ * which would stretch a five second break into a minute or more, but a page
+ * that is playing audio keeps running normally. Playing silence also holds on
+ * to the audio focus, so the lock screen controls and Bluetooth connection
+ * survive the pause.
+ */
+function silentWav(seconds) {
+  const sampleRate = 8000;
+  const samples = Math.max(1, Math.round(sampleRate * seconds));
+  const buffer = new ArrayBuffer(44 + samples);
+  const view = new DataView(buffer);
+  const text = (offset, value) => {
+    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+  };
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);        // PCM header size
+  view.setUint16(20, 1, true);         // PCM
+  view.setUint16(22, 1, true);         // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true); // byte rate
+  view.setUint16(32, 1, true);          // block align
+  view.setUint16(34, 8, true);          // bits per sample
+  text(36, 'data');
+  view.setUint32(40, samples, true);
+  // 8-bit PCM silence is 128, and the buffer is already zero-filled, so fill it.
+  new Uint8Array(buffer, 44).fill(128);
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
 export class Player {
   constructor() {
     this.audio = new Audio();
@@ -26,15 +61,34 @@ export class Player {
     this.index = -1;
     this.objectUrl = null;
     this.artworkUrl = null;
-    this.skipSeconds = 10;
+    this.backSeconds = 10;
+    this.forwardSeconds = 10;
     this.autoAdvance = true;
     // How many times the current lesson should play in a row. 1 means play it
     // once; Infinity repeats it until stopped.
     this.repeatTarget = 1;
     this.playsDone = 0;
+    // Silent break between repeats, in seconds.
+    this.breakSeconds = 0;
     this.listeners = new Set();
     this._saveTimer = 0;
     this._markedPlayed = false;
+
+    this.breakAudio = new Audio();
+    this.breakAudio.preload = 'auto';
+    this._breakUrl = null;
+    this._onBreakDone = null;
+    this.breakAudio.addEventListener('timeupdate', () => this._emit());
+    this.breakAudio.addEventListener('ended', () => {
+      const done = this._onBreakDone;
+      this._clearBreak();
+      if (done) done();
+    });
+    this.breakAudio.addEventListener('error', () => {
+      const done = this._onBreakDone;
+      this._clearBreak();
+      if (done) done();
+    });
 
     this.audio.addEventListener('timeupdate', () => {
       this._maybeMarkPlayed();
@@ -58,12 +112,24 @@ export class Player {
     });
     this.audio.addEventListener('pause', () => {
       this._flushProgress();
-      this._setPlaybackState('paused');
+      // A break is still "playing" as far as the listener is concerned, so the
+      // lock screen should not flip to paused between repeats.
+      if (!this._onBreakDone) this._setPlaybackState('paused');
       this._emit();
     });
     this.audio.addEventListener('ratechange', () => { this._updatePositionState(); this._emit(); });
     this.audio.addEventListener('ended', () => this._onEnded());
-    this.audio.addEventListener('error', () => this._emit());
+    this.audio.addEventListener('error', () => {
+      const track = this.currentTrack;
+      const snapshot = this.snapshot();
+      for (const listener of this.listeners) {
+        listener(snapshot, {
+          loadError: track
+            ? `"${track.title}" could not be played. Try removing it and adding the file again.`
+            : 'That audio could not be played.',
+        });
+      }
+    });
 
     this._installMediaSession();
   }
@@ -80,12 +146,13 @@ export class Player {
   }
 
   snapshot() {
+    const breaking = this.isBreaking;
     return {
       course: this.course,
       track: this.currentTrack,
       index: this.index,
       total: this.tracks.length,
-      playing: !this.audio.paused && !this.audio.ended && this.audio.readyState > 0,
+      playing: breaking || (!this.audio.paused && !this.audio.ended && this.audio.readyState > 0),
       currentTime: this.audio.currentTime || 0,
       duration: Number.isFinite(this.audio.duration) ? this.audio.duration : (this.currentTrack?.duration || 0),
       rate: this.audio.playbackRate,
@@ -93,7 +160,65 @@ export class Player {
       repeatTarget: this.repeatTarget,
       // 1-based number of the pass currently playing, for "Play 2 of 3".
       repeatPass: Math.min(this.playsDone + 1, this.repeatTarget),
+      breaking,
+      breakRemaining: breaking
+        ? Math.max(0, Math.ceil((this.breakAudio.duration || this.breakSeconds) - (this.breakAudio.currentTime || 0)))
+        : 0,
     };
+  }
+
+  /** True while the silent break between repeats is running. */
+  get isBreaking() {
+    return Boolean(this._onBreakDone) && !this.breakAudio.paused;
+  }
+
+  /**
+   * Waits for the configured break, then runs `next`. The wait is driven by
+   * playing silence so it stays accurate with the screen off.
+   */
+  async _runBreak(next) {
+    if (!(this.breakSeconds > 0)) { next(); return; }
+    this._clearBreak();
+    // Remember what the break belongs to, so a lesson change during the break
+    // cannot resume the wrong audio.
+    const forTrackId = this.currentTrack?.id;
+    this._onBreakDone = () => {
+      if (this.currentTrack?.id !== forTrackId) { this._emit(); return; }
+      next();
+    };
+    this._breakUrl = URL.createObjectURL(silentWav(this.breakSeconds));
+    this.breakAudio.src = this._breakUrl;
+    this.breakAudio.currentTime = 0;
+    try {
+      await this.breakAudio.play();
+      // The listener is still in a session, so keep the lock screen showing
+      // "playing" while the silence runs.
+      this._setPlaybackState('playing');
+      this._emit();
+    } catch {
+      // If the silence cannot play, fall straight through to the next pass.
+      this._clearBreak();
+      next();
+    }
+  }
+
+  /** Stops any running break. Returns the pending action, if there was one. */
+  _clearBreak() {
+    const pending = this._onBreakDone;
+    this._onBreakDone = null;
+    try { this.breakAudio.pause(); } catch { /* ignore */ }
+    if (this._breakUrl) {
+      URL.revokeObjectURL(this._breakUrl);
+      this._breakUrl = null;
+    }
+    return pending;
+  }
+
+  /** Ends the break immediately and carries on with what it was waiting for. */
+  skipBreak() {
+    const pending = this._clearBreak();
+    if (pending) pending();
+    else this._emit();
   }
 
   get currentTrack() {
@@ -123,12 +248,17 @@ export class Player {
     if (index < 0 || index >= this.tracks.length) return;
     const track = this.tracks[index];
 
+    this._clearBreak();
     await this._flushProgress();
 
     const blob = await getTrackBlob(track.id);
     if (!blob) throw new Error(`Audio data missing for "${track.title}".`);
 
-    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
+    // Point the element at the new audio *before* releasing the old blob URL.
+    // Revoking a URL while the element is still reading it makes the element
+    // fail to load, which left the next lesson silent when a listener switched
+    // lessons during playback.
+    const previousUrl = this.objectUrl;
     this.objectUrl = URL.createObjectURL(blob);
     this.index = index;
     this._markedPlayed = false;
@@ -136,6 +266,7 @@ export class Player {
 
     this.audio.src = this.objectUrl;
     this.audio.load();
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
 
     let position = startAt ?? 0;
     if (startAt === null && resume) {
@@ -177,6 +308,7 @@ export class Player {
   /* ---------------------------------------------------------------- */
 
   async play() {
+    if (this.isBreaking) { this.skipBreak(); return; }
     if (this.index < 0 && this.tracks.length) return this.load(0);
     try {
       await this.audio.play();
@@ -188,17 +320,20 @@ export class Player {
   }
 
   pause() {
+    this._clearBreak();
     this.audio.pause();
     this._emit();
   }
 
   toggle() {
+    if (this.isBreaking) { this.skipBreak(); return; }
     if (this.audio.paused) this.play();
     else this.pause();
   }
 
   /** Stops playback, rewinds, and starts the repeat cycle again. */
   stop() {
+    this._clearBreak();
     this.audio.pause();
     try { this.audio.currentTime = 0; } catch { /* ignore */ }
     this.playsDone = 0;
@@ -210,14 +345,15 @@ export class Player {
 
   skip(seconds) {
     if (this.index < 0) return;
+    if (this.isBreaking) this.skipBreak();
     const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : Infinity;
     const target = Math.min(Math.max(0, this.audio.currentTime + seconds), duration - 0.25);
     try { this.audio.currentTime = Math.max(0, target); } catch { /* ignore */ }
     this._emit();
   }
 
-  back() { this.skip(-this.skipSeconds); }
-  forward() { this.skip(this.skipSeconds); }
+  back() { this.skip(-this.backSeconds); }
+  forward() { this.skip(this.forwardSeconds); }
 
   seekTo(seconds) {
     if (this.index < 0) return;
@@ -226,6 +362,7 @@ export class Player {
   }
 
   async previous() {
+    this._clearBreak();
     // Mirrors the usual convention: restart the track unless we are near its start.
     if (this.audio.currentTime > 3) {
       this.seekTo(0);
@@ -236,6 +373,7 @@ export class Player {
   }
 
   async next() {
+    this._clearBreak();
     if (this.index < this.tracks.length - 1) {
       await this.load(this.index + 1, { autoplay: true, resume: false });
     } else {
@@ -258,8 +396,20 @@ export class Player {
     this._emit();
   }
 
-  setSkipSeconds(seconds) {
-    this.skipSeconds = seconds;
+  setBackSeconds(seconds) {
+    this.backSeconds = seconds;
+    this._emit();
+  }
+
+  setForwardSeconds(seconds) {
+    this.forwardSeconds = seconds;
+    this._emit();
+  }
+
+  /** Length of the silent break between repeats, in seconds (0 disables it). */
+  setBreakSeconds(seconds) {
+    this.breakSeconds = Math.max(0, seconds || 0);
+    if (!this.breakSeconds && this.isBreaking) this.skipBreak();
     this._emit();
   }
 
@@ -320,7 +470,10 @@ export class Player {
     if (track && this.playsDone < this.repeatTarget) {
       this._markedPlayed = false;
       try { this.audio.currentTime = 0; } catch { /* ignore */ }
-      await this.play();
+      this._runBreak(() => {
+        this.audio.play().catch(() => {});
+        this._emit();
+      });
       this._emit();
       return;
     }

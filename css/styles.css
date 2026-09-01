@@ -399,6 +399,7 @@ button { font: inherit; cursor: pointer; }
   color: #06231a;
   background: var(--ok);
 }
+.repeat-badge.is-break { background: var(--accent); color: #fff; }
 
 .seek { margin-bottom: 10px; }
 .seek input[type="range"] { width: 100%; }

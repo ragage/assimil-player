@@ -4,7 +4,7 @@
  * live in IndexedDB, which is where the import step puts them.
  */
 
-const CACHE = 'assimil-player-v4';
+const CACHE = 'assimil-player-v5';
 
 const SHELL = [
   './',
@@ -25,7 +25,9 @@ const SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
+      // `reload` bypasses the browser's own HTTP cache, otherwise a new version
+      // of the worker can end up caching the previous version's files.
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

@@ -81,15 +81,19 @@ async function init() {
   state.device = await getDevice();
   $('#device-name-label').textContent = state.device.name;
 
-  player.skipSeconds = Number(await getSetting('skipSeconds', 10));
+  player.backSeconds = Number(await getSetting('backSeconds', await getSetting('skipSeconds', 10)));
+  player.forwardSeconds = Number(await getSetting('forwardSeconds', await getSetting('skipSeconds', 10)));
   player.autoAdvance = (await getSetting('autoAdvance', true)) !== false;
   const rate = Number(await getSetting('playbackRate', 1));
   player.setRate(rate);
   const repeat = await getSetting('repeat', '1');
   player.setRepeat(parseRepeat(repeat));
+  player.setBreakSeconds(Number(await getSetting('breakSeconds', 0)));
   $('#repeat').value = String(repeat);
+  $('#break-seconds').value = String(player.breakSeconds);
   $('#rate').value = String(rate);
-  $('#skip-seconds').value = String(player.skipSeconds);
+  $('#back-seconds').value = String(player.backSeconds);
+  $('#forward-seconds').value = String(player.forwardSeconds);
   $('#auto-advance').checked = player.autoAdvance;
   updateSkipLabels();
 
@@ -387,13 +391,18 @@ function renderPlayerState(snapshot, extra) {
     : 'Pick a lesson to begin';
 
   const badge = $('#repeat-badge');
-  const { repeatTarget, repeatPass } = snapshot;
-  const showBadge = Boolean(track) && repeatTarget > 1;
+  const { repeatTarget, repeatPass, breaking, breakRemaining } = snapshot;
+  const showBadge = Boolean(track) && (repeatTarget > 1 || breaking);
   badge.classList.toggle('hidden', !showBadge);
+  badge.classList.toggle('is-break', Boolean(breaking));
   if (showBadge) {
-    badge.textContent = repeatTarget === Infinity
-      ? `Repeating · play ${repeatPass}`
-      : `Play ${repeatPass} of ${repeatTarget}`;
+    if (breaking) {
+      badge.textContent = `Break · next play in ${breakRemaining}s`;
+    } else {
+      badge.textContent = repeatTarget === Infinity
+        ? `Repeating · play ${repeatPass}`
+        : `Play ${repeatPass} of ${repeatTarget}`;
+    }
   }
 
   $('#time-current').textContent = formatTime(currentTime);
@@ -403,6 +412,8 @@ function renderPlayerState(snapshot, extra) {
   }
 
   updateMiniPlayer(snapshot);
+
+  if (extra?.loadError) toast(extra.loadError);
 
   if (extra?.playedChanged) {
     getProgress(extra.playedChanged).then((row) => {
@@ -533,11 +544,23 @@ function wireEvents() {
       : target === 1 ? 'Repeat off.'
       : `This lesson will play ${target} times in a row.`);
   });
-  $('#skip-seconds').addEventListener('change', (event) => {
+  $('#back-seconds').addEventListener('change', (event) => {
     const value = Number(event.target.value);
-    player.setSkipSeconds(value);
-    setSetting('skipSeconds', value);
+    player.setBackSeconds(value);
+    setSetting('backSeconds', value);
     updateSkipLabels();
+  });
+  $('#forward-seconds').addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    player.setForwardSeconds(value);
+    setSetting('forwardSeconds', value);
+    updateSkipLabels();
+  });
+  $('#break-seconds').addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    player.setBreakSeconds(value);
+    setSetting('breakSeconds', value);
+    toast(value ? `${value} second break between repeats.` : 'No break between repeats.');
   });
   $('#auto-advance').addEventListener('change', (event) => {
     player.autoAdvance = event.target.checked;
@@ -664,9 +687,14 @@ function wireEvents() {
 }
 
 function updateSkipLabels() {
-  for (const label of document.querySelectorAll('[data-skip-label]')) {
-    label.textContent = String(player.skipSeconds);
+  for (const label of document.querySelectorAll('[data-back-label]')) {
+    label.textContent = String(player.backSeconds);
   }
+  for (const label of document.querySelectorAll('[data-forward-label]')) {
+    label.textContent = String(player.forwardSeconds);
+  }
+  $('#btn-back').setAttribute('aria-label', `Skip back ${player.backSeconds} seconds`);
+  $('#btn-forward').setAttribute('aria-label', `Skip forward ${player.forwardSeconds} seconds`);
 }
 
 async function openCourseDialog(course = null) {

@@ -44,8 +44,10 @@ export async function prepareCover(file) {
   if (!blob) throw new Error('That picture could not be saved.');
 
   // Re-encoding tiny images can make them bigger; keep whichever is smaller.
+  // The original is copied into a standalone Blob first, because a File from
+  // the picker would stop working once the picture is moved or deleted.
   if (scale === 1 && file.size < blob.size && file.type && file.type !== 'image/heic') {
-    return file;
+    return new Blob([await file.arrayBuffer()], { type: file.type });
   }
   return blob;
 }

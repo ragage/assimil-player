@@ -36,7 +36,9 @@ as a few tens of kilobytes and leaves the space for your audio.
 **Player**
 
 - Play, pause and stop
-- Skip backward and forward (5, 10, 15 or 30 seconds)
+- Skip backward and forward, each with its own step (5 to 60 seconds) so you
+  can jump back a long way to re-hear a phrase while nudging forward in
+  smaller steps
 - Previous and next lesson
 - Drag the seek bar to any point
 - Playback speed from 0.6× to 1.5× — useful when a dialogue is spoken quickly
@@ -44,6 +46,9 @@ as a few tens of kilobytes and leaves the space for your audio.
   reinforcement during a single daily study session. A badge on the player
   shows which pass is playing ("Play 2 of 3"). When the repeats are finished
   the player moves on to the next lesson if auto-advance is on.
+- **Break** of up to 30 seconds between repeats, to give you a moment to think
+  before the lesson starts again. The badge counts the break down, and pressing
+  play skips the rest of it.
 - Auto-advance to the next lesson, which can be switched off
 - Resumes an unfinished lesson exactly where it was left
 - Lock-screen and headphone controls via the Media Session API
@@ -74,6 +79,13 @@ python -m http.server 8080
 ```
 
 Then open <http://localhost:8080>.
+
+While changing the code, prefer the bundled development server, which tells the
+browser not to cache anything so edits show up on a plain reload:
+
+```powershell
+python tools\devserver.py . 8080
+```
 
 Any static host works too: GitHub Pages, Netlify, Cloudflare Pages, Azure
 Static Web Apps, or a folder on your own web server. Copy the whole directory
@@ -138,12 +150,15 @@ js/import.js             File import, natural sort, duration probing
 js/image.js              Cover pictures: decode, downscale, re-encode
 icons/                   App icons
 tools/generate-icons.js  Regenerates the icons (node tools/generate-icons.js)
+tools/devserver.py       Local no-cache server for development
 ```
 
 ## Notes
 
 - Nothing is uploaded anywhere. The audio and the listening history never leave
   the device.
+- Imported audio is copied into the app's own storage, so moving or deleting
+  the original files afterwards does not affect playback.
 - Because history is per device by design, listening to a lesson on the iPad
   does not mark it played on the PC. Use *Export listening report* if you want
   to compare devices.
