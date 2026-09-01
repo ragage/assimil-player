@@ -27,7 +27,13 @@ from **Settings**. It follows the device's own language on first run, and your
 course titles and lesson names are never translated. Everything else — the
 audio, the covers and the listening history — is untouched by the choice.
 
-**Welcome screen** — pick which language to listen to. Each course shows its
+**Portrait and landscape** — the layout adapts to either. Sideways on a phone
+the player becomes two columns, with the cover on the left and everything you
+touch on the right, so no control drops below the fold mid-lesson. **Settings**
+offers *Auto*, *Portrait* or *Landscape*; auto follows the device, and locking
+takes effect once the app is installed.
+
+**Welcome screen** — pick which course to listen to. Each course shows its
 cover picture, a progress bar and how many lessons have been played on this
 device.
 
@@ -122,7 +128,7 @@ device in airplane mode.
 
 ## Loading your MP3 files
 
-1. Open the app and tap **+ Add a language**.
+1. Open the app and tap **+ Add a course**.
 2. Give the course a title, for example `Le Japonais sans Peine`, and
    optionally a subtitle such as `Volume 1 — lessons 1 to 50`.
 3. Optionally tap **Choose picture** to give the language a cover.

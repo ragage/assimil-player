@@ -560,6 +560,8 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: none;
   color: #fff;
   font-weight: 600;
 }
+.segmented.three { grid-template-columns: repeat(3, 1fr); }
+.segmented.three .segment { padding: 10px 4px; font-size: .84rem; }
 
 /* ------------------------------ mini player ---------------------------- */
 
@@ -695,4 +697,81 @@ dialog menu { display: flex; justify-content: flex-end; gap: 10px; margin: 18px 
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ------------------------- landscape on a phone ------------------------ */
+/*
+ * Sideways the screen is short, so the player becomes two columns: artwork on
+ * the left, everything you touch on the right. Without this the transport and
+ * the settings drop below the fold and need scrolling mid-lesson.
+ */
+@media (orientation: landscape) and (max-height: 560px) {
+  .screen {
+    padding: calc(var(--safe-top) + 10px) 18px calc(var(--safe-bottom) + 80px);
+    max-width: 100%;
+  }
+
+  #screen-player.is-active {
+    display: grid;
+    grid-template-columns: minmax(0, 210px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 20px;
+    align-content: start;
+    /* The mini player never appears on this screen, so the space normally
+       reserved for it is given back to the controls. */
+    padding-bottom: calc(var(--safe-bottom) + 10px);
+  }
+  #screen-player .app-header { grid-column: 1 / -1; margin-bottom: 2px; }
+  #screen-player .app-header .icon-btn { width: 38px; height: 38px; flex: 0 0 38px; }
+
+  .artwork {
+    grid-column: 1;
+    width: 100%;
+    max-width: 158px;
+    margin: 0 auto;
+    border-radius: 16px;
+    font-size: 2.3rem;
+    box-shadow: none;
+  }
+
+  .player-side {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .now-playing { margin-bottom: 0; text-align: left; }
+  .now-playing h2 { font-size: 1rem; margin-bottom: 1px; }
+  .now-playing p { font-size: .78rem; }
+  .repeat-badge, .sleep-badge { margin-top: 4px !important; padding: 3px 10px; font-size: .72rem; }
+  .seek { margin-bottom: 0; }
+  .seek input[type="range"] { height: 20px; }
+  .times { font-size: .7rem; }
+  .transport { margin: 0; justify-content: flex-start; gap: 7px; }
+  .round-btn { width: 42px; height: 42px; }
+  .round-btn svg { width: 19px; height: 19px; }
+  .round-btn.play { width: 52px; height: 52px; }
+  .round-btn.play svg { width: 22px; height: 22px; }
+  .skip-label { font-size: .55rem; }
+
+  .secondary-transport { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .select-wrap, .switch, .secondary-transport .ghost-btn {
+    padding: 6px 9px;
+    font-size: .74rem;
+    border-radius: 10px;
+  }
+  .stop-btn { padding: 8px 12px; font-size: .84rem; border-radius: 10px; }
+
+  .filler { display: none; }
+
+  /* The library and lesson list simply use the extra width. */
+  .course-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+  .course-card { min-height: 126px; }
+  dialog { max-height: 92dvh; }
+}
+
+/* Landscape with room to spare keeps the tall layout, just wider. */
+@media (orientation: landscape) and (min-height: 561px) {
+  .screen { max-width: 820px; }
+  .course-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 }

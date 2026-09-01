@@ -111,6 +111,7 @@ async function init() {
 
   await renderLibrary();
   await refreshStorageLine();
+  await applyOrientation(await getSetting('orientation', 'auto'));
 
   const lastCourseId = await getSetting('lastCourseId');
   if (lastCourseId && state.courses.some((course) => course.id === lastCourseId)) {
@@ -206,9 +207,7 @@ async function applyLanguage(code) {
   await setSetting('language', code);
   translateDocument();
   renderDeviceLine();
-  for (const button of document.querySelectorAll('#language-toggle .segment')) {
-    button.classList.toggle('is-active', button.dataset.lang === code);
-  }
+  markSegments('#language-toggle', 'lang', code);
   updateSkipLabels();
   updateCoverPreview();
   await renderLibrary();
@@ -218,6 +217,44 @@ async function applyLanguage(code) {
     renderCourseSummary();
   }
   renderPlayerState(player.snapshot());
+}
+
+function markSegments(container, dataKey, value) {
+  for (const button of document.querySelectorAll(`${container} .segment`)) {
+    button.classList.toggle('is-active', button.dataset[dataKey] === value);
+  }
+}
+
+/**
+ * Applies the chosen screen orientation.
+ *
+ * Locking is only permitted for an installed app, so in a browser tab the
+ * request is refused. The preference is still remembered and takes effect once
+ * the app is installed; the layout itself adapts to either orientation
+ * regardless of whether locking is available.
+ */
+async function applyOrientation(mode, { announce = false } = {}) {
+  await setSetting('orientation', mode);
+  markSegments('#orientation-toggle', 'orientation', mode);
+
+  const orientation = screen.orientation;
+  if (!orientation) {
+    if (announce) toast(t('toast.orientationNeedsApp'));
+    return;
+  }
+
+  if (mode === 'auto') {
+    try { orientation.unlock(); } catch { /* nothing to unlock */ }
+    if (announce) toast(t('toast.orientationAuto'));
+    return;
+  }
+
+  try {
+    await orientation.lock(mode === 'portrait' ? 'portrait' : 'landscape');
+    if (announce) toast(t('toast.orientationLocked', { mode: t(`orientation.${mode}`) }));
+  } catch {
+    if (announce) toast(t('toast.orientationNeedsApp'));
+  }
 }
 
 /** The repeat menu stores "inf" for endless looping, otherwise a count. */
@@ -697,6 +734,10 @@ function wireEvents() {
     const button = event.target.closest('.segment');
     if (button) applyLanguage(button.dataset.lang);
   });
+  on('#orientation-toggle', 'click', (event) => {
+    const button = event.target.closest('.segment');
+    if (button) applyOrientation(button.dataset.orientation, { announce: true });
+  });
 
   /* --- keyboard shortcuts (PC) --- */
   document.addEventListener('keydown', (event) => {
@@ -885,9 +926,8 @@ async function applyPendingCover(courseId, pendingCover) {
 
 async function openSettings() {
   $('#device-name-input').value = state.device.name;
-  for (const button of document.querySelectorAll('#language-toggle .segment')) {
-    button.classList.toggle('is-active', button.dataset.lang === getLanguage());
-  }
+  markSegments('#language-toggle', 'lang', getLanguage());
+  markSegments('#orientation-toggle', 'orientation', await getSetting('orientation', 'auto'));
   await fillSettingsStorage();
   $('#dlg-settings').showModal();
 }
