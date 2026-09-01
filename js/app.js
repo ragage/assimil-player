@@ -85,6 +85,9 @@ async function init() {
   player.autoAdvance = (await getSetting('autoAdvance', true)) !== false;
   const rate = Number(await getSetting('playbackRate', 1));
   player.setRate(rate);
+  const repeat = await getSetting('repeat', '1');
+  player.setRepeat(parseRepeat(repeat));
+  $('#repeat').value = String(repeat);
   $('#rate').value = String(rate);
   $('#skip-seconds').value = String(player.skipSeconds);
   $('#auto-advance').checked = player.autoAdvance;
@@ -111,6 +114,11 @@ function registerServiceWorker() {
   navigator.serviceWorker.register('sw.js').catch((error) => {
     console.warn('Offline cache unavailable:', error);
   });
+}
+
+/** The repeat menu stores "inf" for endless looping, otherwise a count. */
+function parseRepeat(value) {
+  return value === 'inf' ? Infinity : Math.max(1, Number(value) || 1);
 }
 
 /**
@@ -378,6 +386,16 @@ function renderPlayerState(snapshot, extra) {
     ? `Lesson ${index + 1} of ${total}${state.course ? ` · ${state.course.title}` : ''}`
     : 'Pick a lesson to begin';
 
+  const badge = $('#repeat-badge');
+  const { repeatTarget, repeatPass } = snapshot;
+  const showBadge = Boolean(track) && repeatTarget > 1;
+  badge.classList.toggle('hidden', !showBadge);
+  if (showBadge) {
+    badge.textContent = repeatTarget === Infinity
+      ? `Repeating · play ${repeatPass}`
+      : `Play ${repeatPass} of ${repeatTarget}`;
+  }
+
   $('#time-current').textContent = formatTime(currentTime);
   $('#time-total').textContent = formatTime(duration);
   if (!state.seeking) {
@@ -505,6 +523,15 @@ function wireEvents() {
     const value = Number(event.target.value);
     player.setRate(value);
     setSetting('playbackRate', value);
+  });
+  $('#repeat').addEventListener('change', (event) => {
+    const raw = event.target.value;
+    player.setRepeat(parseRepeat(raw));
+    setSetting('repeat', raw);
+    const target = parseRepeat(raw);
+    toast(target === Infinity ? 'This lesson will repeat until you stop it.'
+      : target === 1 ? 'Repeat off.'
+      : `This lesson will play ${target} times in a row.`);
   });
   $('#skip-seconds').addEventListener('change', (event) => {
     const value = Number(event.target.value);

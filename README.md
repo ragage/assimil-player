@@ -40,6 +40,10 @@ as a few tens of kilobytes and leaves the space for your audio.
 - Previous and next lesson
 - Drag the seek bar to any point
 - Playback speed from 0.6× to 1.5× — useful when a dialogue is spoken quickly
+- **Repeat** the current lesson 2, 3, 5 or 10 times, or endlessly, for
+  reinforcement during a single daily study session. A badge on the player
+  shows which pass is playing ("Play 2 of 3"). When the repeats are finished
+  the player moves on to the next lesson if auto-advance is on.
 - Auto-advance to the next lesson, which can be switched off
 - Resumes an unfinished lesson exactly where it was left
 - Lock-screen and headphone controls via the Media Session API
@@ -50,7 +54,8 @@ as a few tens of kilobytes and leaves the space for your audio.
 
 - A lesson is marked as played automatically once 94% of it has been heard
 - It can also be ticked or unticked by hand
-- Play counts, resume positions and "last played" dates are recorded
+- Play counts, resume positions and "last played" dates are recorded — a lesson
+  repeated three times counts as three plays
 - Each device is given a name (Settings) and keeps its own separate history
 - The history can be exported as JSON from Settings
 

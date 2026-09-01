@@ -28,6 +28,10 @@ export class Player {
     this.artworkUrl = null;
     this.skipSeconds = 10;
     this.autoAdvance = true;
+    // How many times the current lesson should play in a row. 1 means play it
+    // once; Infinity repeats it until stopped.
+    this.repeatTarget = 1;
+    this.playsDone = 0;
     this.listeners = new Set();
     this._saveTimer = 0;
     this._markedPlayed = false;
@@ -86,6 +90,9 @@ export class Player {
       duration: Number.isFinite(this.audio.duration) ? this.audio.duration : (this.currentTrack?.duration || 0),
       rate: this.audio.playbackRate,
       hasTrack: this.index >= 0,
+      repeatTarget: this.repeatTarget,
+      // 1-based number of the pass currently playing, for "Play 2 of 3".
+      repeatPass: Math.min(this.playsDone + 1, this.repeatTarget),
     };
   }
 
@@ -125,6 +132,7 @@ export class Player {
     this.objectUrl = URL.createObjectURL(blob);
     this.index = index;
     this._markedPlayed = false;
+    this.playsDone = 0;
 
     this.audio.src = this.objectUrl;
     this.audio.load();
@@ -189,10 +197,12 @@ export class Player {
     else this.pause();
   }
 
-  /** Stops playback and rewinds to the beginning of the current track. */
+  /** Stops playback, rewinds, and starts the repeat cycle again. */
   stop() {
     this.audio.pause();
     try { this.audio.currentTime = 0; } catch { /* ignore */ }
+    this.playsDone = 0;
+    this._markedPlayed = false;
     const track = this.currentTrack;
     if (track) saveProgress(track.id, track.courseId, { position: 0 }).catch(() => {});
     this._emit();
@@ -235,6 +245,16 @@ export class Player {
 
   setRate(rate) {
     this.audio.playbackRate = rate;
+    this._emit();
+  }
+
+  /**
+   * Sets how many times in a row the current lesson plays.
+   * 1 plays it once, 3 plays it three times, Infinity repeats until stopped.
+   */
+  setRepeat(target) {
+    this.repeatTarget = target > 0 ? target : 1;
+    if (this.playsDone >= this.repeatTarget) this.playsDone = 0;
     this._emit();
   }
 
@@ -292,6 +312,20 @@ export class Player {
       await this._recordPlayed(track);
     }
     if (track) await saveProgress(track.id, track.courseId, { position: 0 }).catch(() => {});
+
+    this.playsDone += 1;
+
+    // Repeating the lesson takes precedence over moving to the next one, so a
+    // study session can drill the same lesson the chosen number of times.
+    if (track && this.playsDone < this.repeatTarget) {
+      this._markedPlayed = false;
+      try { this.audio.currentTime = 0; } catch { /* ignore */ }
+      await this.play();
+      this._emit();
+      return;
+    }
+
+    this.playsDone = 0;
     if (this.autoAdvance && this.index < this.tracks.length - 1) {
       await this.load(this.index + 1, { autoplay: true, resume: false });
     } else {

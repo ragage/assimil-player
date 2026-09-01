@@ -108,6 +108,7 @@
   <div class="now-playing">
     <h2 id="player-title">Nothing playing</h2>
     <p class="muted" id="player-position-label">Lesson &mdash; of &mdash;</p>
+    <p class="repeat-badge hidden" id="repeat-badge"></p>
   </div>
 
   <div class="seek">
@@ -144,6 +145,16 @@
 
   <div class="secondary-transport">
     <button id="btn-stop" class="ghost-btn" type="button">Stop</button>
+    <label class="select-wrap">Repeat
+      <select id="repeat">
+        <option value="1" selected>Off</option>
+        <option value="2">2&times;</option>
+        <option value="3">3&times;</option>
+        <option value="5">5&times;</option>
+        <option value="10">10&times;</option>
+        <option value="inf">&infin;</option>
+      </select>
+    </label>
     <label class="select-wrap">Speed
       <select id="rate">
         <option value="0.6">0.6&times;</option>
