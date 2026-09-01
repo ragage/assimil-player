@@ -1,0 +1,17 @@
+# Audio and cover pictures belong on the device, never in the repository.
+# (Language-course audio is copyrighted material and would bloat the repo.)
+*.mp3
+*.m4a
+*.m4b
+*.aac
+*.wav
+*.ogg
+*.oga
+*.opus
+*.flac
+
+# OS and editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/

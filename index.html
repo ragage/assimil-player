@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Assimil Player</title>
+<meta name="description" content="Offline audio player for language courses. Works on phone, tablet and PC." />
+<meta name="theme-color" content="#101522" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Assimil" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ============================ WELCOME ============================ -->
+<section id="screen-welcome" class="screen is-active">
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Assimil Player</p>
+      <h1>Choose a language</h1>
+    </div>
+    <button id="btn-settings" class="icon-btn" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.7-1L15 2.5H9l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.3-.9-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9c.5.4 1.1.8 1.7 1l.4 2.5h6l.4-2.5c.6-.2 1.2-.6 1.7-1l2.3.9 2-3.4-2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </header>
+
+  <p class="device-line">
+    Playing on <strong id="device-name-label">this device</strong>.
+    Listening history is kept separately on each device.
+  </p>
+
+  <div id="course-grid" class="course-grid"></div>
+
+  <div id="empty-library" class="empty hidden">
+    <h2>No languages yet</h2>
+    <p>Create a course such as <em>Le Portugais</em>, <em>Le Japonais sans Peine</em> or
+       <em>Le Luxembourgeois Facile</em>, then load its MP3 files from this device.
+       Everything is stored offline &mdash; no internet needed to listen.</p>
+  </div>
+
+  <div id="startup-error" class="empty error-box hidden">
+    <h2>The library could not be opened</h2>
+    <p id="startup-error-text"></p>
+    <button id="btn-retry-startup" class="primary-btn" type="button">Try again</button>
+  </div>
+
+  <button id="btn-add-course" class="primary-btn wide" type="button">+ Add a language</button>
+
+  <p class="storage-line" id="storage-line"></p>
+</section>
+
+<!-- ============================ COURSE ============================= -->
+<section id="screen-course" class="screen">
+  <header class="app-header">
+    <button class="icon-btn back" type="button" data-nav="welcome" aria-label="Back to languages">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="course-head-cover" id="course-head-cover"><span id="course-head-letter">A</span></div>
+    <div class="header-title">
+      <h1 id="course-title">Course</h1>
+      <p id="course-subtitle" class="eyebrow"></p>
+    </div>
+    <button id="btn-course-menu" class="icon-btn" type="button" aria-label="Course options">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+    </button>
+  </header>
+
+  <div class="course-summary">
+    <div class="progress-bar"><span id="course-progress-fill"></span></div>
+    <p id="course-progress-text" class="muted"></p>
+  </div>
+
+  <div class="toolbar">
+    <button id="btn-add-files" class="ghost-btn" type="button">+ Add MP3 files</button>
+    <button id="btn-add-folder" class="ghost-btn" type="button">+ Add a folder</button>
+    <button id="btn-continue" class="ghost-btn" type="button">Continue where I left off</button>
+  </div>
+
+  <ol id="track-list" class="track-list"></ol>
+
+  <div id="empty-course" class="empty hidden">
+    <h2>No audio yet</h2>
+    <p>Add the MP3 files for this language. They are copied into the app so they
+       play with no connection.</p>
+  </div>
+
+  <div class="filler"></div>
+</section>
+
+<!-- ============================ PLAYER ============================= -->
+<section id="screen-player" class="screen">
+  <header class="app-header">
+    <button class="icon-btn back" type="button" data-nav="course" aria-label="Back to lessons">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="header-title">
+      <p class="eyebrow" id="player-course">&nbsp;</p>
+    </div>
+    <span class="icon-btn placeholder" aria-hidden="true"></span>
+  </header>
+
+  <div class="artwork" id="player-artwork"><span id="player-artwork-text">A</span></div>
+  <div class="now-playing">
+    <h2 id="player-title">Nothing playing</h2>
+    <p class="muted" id="player-position-label">Lesson &mdash; of &mdash;</p>
+  </div>
+
+  <div class="seek">
+    <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+    <div class="times"><span id="time-current">0:00</span><span id="time-total">0:00</span></div>
+  </div>
+
+  <div class="transport">
+    <button id="btn-prev" class="round-btn" type="button" aria-label="Previous lesson">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v12M19 6 10 12l9 6V6Z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="btn-back" class="round-btn" type="button" aria-label="Skip backward">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.5A8.5 8.5 0 1 0 20.5 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M15 .8 11.4 3.5 15 6.2Z" fill="currentColor"/>
+      </svg>
+      <b class="skip-label" data-skip-label>10</b>
+    </button>
+    <button id="btn-play" class="round-btn play" type="button" aria-label="Play">
+      <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5 19 12 8 18.5Z" fill="currentColor"/></svg>
+      <svg class="icon-pause hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z" fill="currentColor"/></svg>
+    </button>
+    <button id="btn-forward" class="round-btn" type="button" aria-label="Skip forward">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.5A8.5 8.5 0 1 1 3.5 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M9 .8 12.6 3.5 9 6.2Z" fill="currentColor"/>
+      </svg>
+      <b class="skip-label" data-skip-label>10</b>
+    </button>
+    <button id="btn-next" class="round-btn" type="button" aria-label="Next lesson">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 6v12M5 6l9 6-9 6V6Z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <div class="secondary-transport">
+    <button id="btn-stop" class="ghost-btn" type="button">Stop</button>
+    <label class="select-wrap">Speed
+      <select id="rate">
+        <option value="0.6">0.6&times;</option>
+        <option value="0.75">0.75&times;</option>
+        <option value="0.9">0.9&times;</option>
+        <option value="1" selected>1&times;</option>
+        <option value="1.15">1.15&times;</option>
+        <option value="1.3">1.3&times;</option>
+        <option value="1.5">1.5&times;</option>
+      </select>
+    </label>
+    <label class="select-wrap">Skip
+      <select id="skip-seconds">
+        <option value="5">5s</option>
+        <option value="10" selected>10s</option>
+        <option value="15">15s</option>
+        <option value="30">30s</option>
+      </select>
+    </label>
+    <label class="switch">
+      <input id="auto-advance" type="checkbox" checked />
+      <span>Auto&#8209;next</span>
+    </label>
+  </div>
+
+  <div class="filler"></div>
+</section>
+
+<!-- ============================ MINI BAR =========================== -->
+<div id="mini-player" class="mini-player hidden">
+  <button id="mini-open" class="mini-info" type="button">
+    <span class="mini-title" id="mini-title"></span>
+    <span class="mini-sub" id="mini-sub"></span>
+  </button>
+  <button id="mini-back" class="icon-btn" type="button" aria-label="Skip backward">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3.5A8.5 8.5 0 1 0 20.5 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M15 .8 11.4 3.5 15 6.2Z" fill="currentColor"/>
+    </svg>
+  </button>
+  <button id="mini-play" class="icon-btn" type="button" aria-label="Play or pause">
+    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5 19 12 8 18.5Z" fill="currentColor"/></svg>
+    <svg class="icon-pause hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z" fill="currentColor"/></svg>
+  </button>
+  <button id="mini-forward" class="icon-btn" type="button" aria-label="Skip forward">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3.5A8.5 8.5 0 1 1 3.5 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M9 .8 12.6 3.5 9 6.2Z" fill="currentColor"/>
+    </svg>
+  </button>
+</div>
+
+<!-- ============================ DIALOGS ============================ -->
+<dialog id="dlg-course">
+  <form method="dialog" id="form-course">
+    <h2 id="dlg-course-heading">Add a language</h2>
+
+    <div class="cover-picker">
+      <div id="cover-preview" class="cover-preview" aria-hidden="true"><span id="cover-preview-letter">A</span></div>
+      <div class="cover-picker-actions">
+        <p class="muted small">Cover picture <span class="muted">(optional)</span></p>
+        <button id="btn-choose-cover" class="ghost-btn" type="button">Choose picture</button>
+        <button id="btn-remove-cover" class="ghost-btn hidden" type="button">Remove</button>
+      </div>
+    </div>
+
+    <label class="field">Title
+      <input id="course-title-input" type="text" required maxlength="80" placeholder="Le Portugais" />
+    </label>
+    <div class="chips" id="title-suggestions">
+      <button type="button" class="chip">Le Portugais</button>
+      <button type="button" class="chip">Le Japonais sans Peine</button>
+      <button type="button" class="chip">Le Luxembourgeois Facile</button>
+      <button type="button" class="chip">L&rsquo;Espagnol sans Peine</button>
+      <button type="button" class="chip">L&rsquo;Anglais sans Peine</button>
+    </div>
+    <label class="field">Subtitle <span class="muted">(optional)</span>
+      <input id="course-subtitle-input" type="text" maxlength="80" placeholder="Volume 1 &mdash; lessons 1 to 50" />
+    </label>
+    <menu>
+      <button value="cancel" class="ghost-btn" type="submit" formnovalidate>Cancel</button>
+      <button value="save" class="primary-btn" type="submit">Save</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label class="field">Name of this device
+      <input id="device-name-input" type="text" maxlength="40" />
+    </label>
+    <p class="muted small">Progress is stored on this device only. Naming it makes
+       the listening report easier to read when you use several devices.</p>
+    <div class="settings-actions">
+      <button id="btn-export" class="ghost-btn" type="button">Export listening report</button>
+      <button id="btn-persist" class="ghost-btn" type="button">Protect offline files</button>
+    </div>
+    <p class="muted small" id="settings-storage"></p>
+    <menu><button value="close" class="primary-btn" type="submit">Done</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-course-menu">
+  <form method="dialog">
+    <h2>Course options</h2>
+    <div class="settings-actions column">
+      <button id="btn-rename-course" class="ghost-btn" type="button">Edit name and picture</button>
+      <button id="btn-mark-all-unplayed" class="ghost-btn" type="button">Reset progress on this device</button>
+      <button id="btn-delete-course" class="danger-btn" type="button">Delete course and its audio</button>
+    </div>
+    <menu><button value="close" class="primary-btn" type="submit">Close</button></menu>
+  </form>
+</dialog>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<div id="busy" class="busy hidden">
+  <div class="busy-card">
+    <div class="spinner"></div>
+    <p id="busy-text">Working&hellip;</p>
+    <div class="progress-bar"><span id="busy-fill"></span></div>
+  </div>
+</div>
+
+<input id="file-input" type="file" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.ogg,.opus,.flac" multiple hidden />
+<input id="folder-input" type="file" webkitdirectory directory multiple hidden />
+<input id="cover-input" type="file" accept="image/*" hidden />
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
