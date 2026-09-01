@@ -109,6 +109,7 @@
     <h2 id="player-title">Nothing playing</h2>
     <p class="muted" id="player-position-label">Lesson &mdash; of &mdash;</p>
     <p class="repeat-badge hidden" id="repeat-badge"></p>
+    <p class="sleep-badge hidden" id="sleep-badge"></p>
   </div>
 
   <div class="seek">
@@ -144,7 +145,6 @@
   </div>
 
   <div class="secondary-transport">
-    <button id="btn-stop" class="ghost-btn" type="button">Stop</button>
     <label class="select-wrap">Repeat
       <select id="repeat">
         <option value="1" selected>Off</option>
@@ -164,17 +164,6 @@
         <option value="10">10s</option>
         <option value="20">20s</option>
         <option value="30">30s</option>
-      </select>
-    </label>
-    <label class="select-wrap">Speed
-      <select id="rate">
-        <option value="0.6">0.6&times;</option>
-        <option value="0.75">0.75&times;</option>
-        <option value="0.9">0.9&times;</option>
-        <option value="1" selected>1&times;</option>
-        <option value="1.15">1.15&times;</option>
-        <option value="1.3">1.3&times;</option>
-        <option value="1.5">1.5&times;</option>
       </select>
     </label>
     <label class="select-wrap">Back
@@ -197,6 +186,35 @@
         <option value="60">60s</option>
       </select>
     </label>
+    <label class="select-wrap">Speed
+      <select id="rate">
+        <option value="0.6">0.6&times;</option>
+        <option value="0.75">0.75&times;</option>
+        <option value="0.9">0.9&times;</option>
+        <option value="1" selected>1&times;</option>
+        <option value="1.15">1.15&times;</option>
+        <option value="1.3">1.3&times;</option>
+        <option value="1.5">1.5&times;</option>
+      </select>
+    </label>
+    <label class="select-wrap">Sleep
+      <select id="sleep-minutes">
+        <option value="0" selected>Off</option>
+        <option value="5">5 min</option>
+        <option value="10">10 min</option>
+        <option value="15">15 min</option>
+        <option value="20">20 min</option>
+        <option value="25">25 min</option>
+        <option value="30">30 min</option>
+        <option value="35">35 min</option>
+        <option value="40">40 min</option>
+        <option value="45">45 min</option>
+        <option value="50">50 min</option>
+        <option value="55">55 min</option>
+        <option value="60">60 min</option>
+      </select>
+    </label>
+    <button id="btn-stop" class="ghost-btn" type="button">Stop</button>
     <label class="switch">
       <input id="auto-advance" type="checkbox" checked />
       <span>Auto&#8209;next</span>

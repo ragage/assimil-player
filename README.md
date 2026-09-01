@@ -49,7 +49,13 @@ as a few tens of kilobytes and leaves the space for your audio.
 - **Break** of up to 30 seconds between repeats, to give you a moment to think
   before the lesson starts again. The badge counts the break down, and pressing
   play skips the rest of it.
+- **Sleep timer** from 5 to 60 minutes in five minute steps, for listening in
+  bed. Playback fades out gently and stops on its own, so you do not have to
+  find the phone. The player shows the time remaining, and the timer always
+  starts fresh — it is never left switched on from the night before.
 - Auto-advance to the next lesson, which can be switched off
+- Playback continues while the phone is locked or you use another app, with
+  controls on the lock screen
 - Resumes an unfinished lesson exactly where it was left
 - Lock-screen and headphone controls via the Media Session API
 - Keyboard shortcuts on a PC: `space` play/pause, `←`/`→` skip,
@@ -162,6 +168,11 @@ tools/devserver.py       Local no-cache server for development
 - Because history is per device by design, listening to a lesson on the iPad
   does not mark it played on the PC. Use *Export listening report* if you want
   to compare devices.
+- Playback and the sleep timer both keep running with the screen off. They are
+  driven by audio events rather than ordinary timers, because phones throttle
+  timers once the screen is locked. If audio ever stops unexpectedly on a
+  Samsung, Xiaomi or OnePlus handset, set the app's battery usage to
+  *Unrestricted* in the Android settings.
 - Updating the app: bump `CACHE` in [sw.js](./sw.js) so devices pick up the new
   version on next launch.
 - If the app is open in several tabs when a new version changes the database

@@ -405,6 +405,13 @@ function renderPlayerState(snapshot, extra) {
     }
   }
 
+  const sleepBadge = $('#sleep-badge');
+  const showSleep = snapshot.sleepRemainingMs > 0;
+  sleepBadge.classList.toggle('hidden', !showSleep);
+  if (showSleep) {
+    sleepBadge.textContent = `Sleep in ${formatTime(snapshot.sleepRemainingMs / 1000)}`;
+  }
+
   $('#time-current').textContent = formatTime(currentTime);
   $('#time-total').textContent = formatTime(duration);
   if (!state.seeking) {
@@ -414,6 +421,11 @@ function renderPlayerState(snapshot, extra) {
   updateMiniPlayer(snapshot);
 
   if (extra?.loadError) toast(extra.loadError);
+  if (extra?.sleepFired) {
+    $('#sleep-minutes').value = '0';
+    $('#sleep-badge').classList.add('hidden');
+    toast('Sleep timer finished — playback stopped.');
+  }
 
   if (extra?.playedChanged) {
     getProgress(extra.playedChanged).then((row) => {
@@ -562,6 +574,13 @@ function wireEvents() {
     setSetting('breakSeconds', value);
     toast(value ? `${value} second break between repeats.` : 'No break between repeats.');
   });
+  $('#sleep-minutes').addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    player.setSleepMinutes(value);
+    toast(value
+      ? `Playback will fade out and stop in ${value} minutes.`
+      : 'Sleep timer switched off.');
+  });
   $('#auto-advance').addEventListener('change', (event) => {
     player.autoAdvance = event.target.checked;
     setSetting('autoAdvance', event.target.checked);
@@ -684,6 +703,12 @@ function wireEvents() {
     if (document.visibilityState === 'hidden') player._flushProgress();
   });
   window.addEventListener('pagehide', () => player._flushProgress());
+
+  // Keeps the sleep countdown ticking even while playback is paused. The timer
+  // itself is driven by media events, so this only refreshes what is shown.
+  setInterval(() => {
+    if (player.sleepEndsAt) renderPlayerState(player.snapshot());
+  }, 1000);
 }
 
 function updateSkipLabels() {

@@ -15,6 +15,7 @@ import {
 } from './db.js';
 
 const PLAYED_THRESHOLD = 0.94; // 94% listened counts as "played"
+const SLEEP_FADE_MS = 6000;    // gentle fade before the sleep timer stops play
 
 /**
  * Builds a silent WAV of the requested length.
@@ -56,6 +57,12 @@ export class Player {
     this.audio = new Audio();
     this.audio.preload = 'metadata';
 
+    // Tells the operating system this is long-form playback that should carry
+    // on when the screen is locked, rather than a transient sound effect.
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch { /* not supported everywhere */ }
+
     this.course = null;
     this.tracks = [];
     this.index = -1;
@@ -70,6 +77,10 @@ export class Player {
     this.playsDone = 0;
     // Silent break between repeats, in seconds.
     this.breakSeconds = 0;
+    // Sleep timer: stops playback at this moment, 0 when switched off.
+    this.sleepEndsAt = 0;
+    this.sleepMinutes = 0;
+    this._sleepFadeStart = 0;
     this.listeners = new Set();
     this._saveTimer = 0;
     this._markedPlayed = false;
@@ -78,7 +89,7 @@ export class Player {
     this.breakAudio.preload = 'auto';
     this._breakUrl = null;
     this._onBreakDone = null;
-    this.breakAudio.addEventListener('timeupdate', () => this._emit());
+    this.breakAudio.addEventListener('timeupdate', () => { this._tickSleep(); this._emit(); });
     this.breakAudio.addEventListener('ended', () => {
       const done = this._onBreakDone;
       this._clearBreak();
@@ -94,6 +105,7 @@ export class Player {
       this._maybeMarkPlayed();
       this._throttledSave();
       this._updatePositionState();
+      this._tickSleep();
       this._emit();
     });
     this.audio.addEventListener('loadedmetadata', () => {
@@ -164,6 +176,8 @@ export class Player {
       breakRemaining: breaking
         ? Math.max(0, Math.ceil((this.breakAudio.duration || this.breakSeconds) - (this.breakAudio.currentTime || 0)))
         : 0,
+      sleepMinutes: this.sleepMinutes,
+      sleepRemainingMs: this.sleepEndsAt ? Math.max(0, this.sleepEndsAt - Date.now()) : 0,
     };
   }
 
@@ -411,6 +425,53 @@ export class Player {
     this.breakSeconds = Math.max(0, seconds || 0);
     if (!this.breakSeconds && this.isBreaking) this.skipBreak();
     this._emit();
+  }
+
+  /**
+   * Stops playback after the given number of minutes, for listening in bed.
+   * Pass 0 to switch the timer off.
+   */
+  setSleepMinutes(minutes) {
+    this.sleepMinutes = Math.max(0, minutes || 0);
+    this.sleepEndsAt = this.sleepMinutes ? Date.now() + this.sleepMinutes * 60000 : 0;
+    this._sleepFadeStart = 0;
+    this.audio.volume = 1;
+    this._emit();
+  }
+
+  /**
+   * Checked from media `timeupdate` events rather than a timer.
+   *
+   * Phones throttle timers once the screen is off, but these events keep
+   * arriving while audio plays, so the timer stays accurate in the dark. The
+   * remaining time is measured against the wall clock, so even a long gap
+   * between events cannot make it overshoot.
+   */
+  _tickSleep() {
+    if (!this.sleepEndsAt) return;
+    const now = Date.now();
+
+    if (!this._sleepFadeStart) {
+      if (now < this.sleepEndsAt) return;
+      this._sleepFadeStart = now;
+    }
+
+    // Fade out over a few seconds so it does not cut off abruptly at night.
+    const elapsed = now - this._sleepFadeStart;
+    const remaining = 1 - elapsed / SLEEP_FADE_MS;
+    if (remaining > 0) {
+      try { this.audio.volume = Math.max(0, Math.min(1, remaining)); } catch { /* ignore */ }
+      return;
+    }
+
+    this._clearBreak();
+    this.audio.pause();
+    try { this.audio.volume = 1; } catch { /* ignore */ }
+    this.sleepEndsAt = 0;
+    this.sleepMinutes = 0;
+    this._sleepFadeStart = 0;
+    this._setPlaybackState('paused');
+    for (const listener of this.listeners) listener(this.snapshot(), { sleepFired: true });
   }
 
   /* ---------------------------------------------------------------- */

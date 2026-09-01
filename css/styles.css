@@ -401,6 +401,19 @@ button { font: inherit; cursor: pointer; }
 }
 .repeat-badge.is-break { background: var(--accent); color: #fff; }
 
+.sleep-badge {
+  display: inline-block;
+  margin-top: 8px !important;
+  margin-left: 6px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+
 .seek { margin-bottom: 10px; }
 .seek input[type="range"] { width: 100%; }
 .times { display: flex; justify-content: space-between; font-size: .76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -462,42 +475,45 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: none;
 }
 
 .secondary-transport {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: stretch;
 }
 .select-wrap {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: .82rem;
   color: var(--muted);
   background: var(--bg-soft);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 7px 12px;
+  padding: 9px 12px;
 }
 .select-wrap select {
   background: transparent;
   border: none;
   color: var(--text);
   font: inherit;
+  text-align: right;
 }
 .select-wrap select option { color: #000; }
 .switch {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   font-size: .82rem;
   color: var(--muted);
   background: var(--bg-soft);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 9px 12px;
 }
 .switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+.secondary-transport .ghost-btn { padding: 9px 12px; }
 
 /* ------------------------------ mini player ---------------------------- */
 
