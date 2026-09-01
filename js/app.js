@@ -13,10 +13,22 @@ import {
 import { Player } from './player.js';
 import { importFiles, probeDurations } from './import.js';
 import { prepareCover } from './image.js';
+import { t, setLanguage, getLanguage, detectLanguage, translateDocument } from './i18n.js';
 
 const $ = (selector) => document.querySelector(selector);
 
 const player = new Player();
+
+/** Values the "Reset" button restores. */
+const DEFAULTS = {
+  repeat: '1',
+  breakSeconds: 0,
+  backSeconds: 10,
+  forwardSeconds: 10,
+  playbackRate: 1,
+  autoAdvance: false,
+  sleepMinutes: 0,
+};
 
 const state = {
   device: { id: '', name: '' },
@@ -78,25 +90,21 @@ function paintCover(element, url, letter) {
 /* ====================================================================== */
 
 async function init() {
-  state.device = await getDevice();
-  $('#device-name-label').textContent = state.device.name;
+  setLanguage(await getSetting('language', detectLanguage()));
+  translateDocument();
 
-  player.backSeconds = Number(await getSetting('backSeconds', await getSetting('skipSeconds', 10)));
-  player.forwardSeconds = Number(await getSetting('forwardSeconds', await getSetting('skipSeconds', 10)));
-  player.autoAdvance = (await getSetting('autoAdvance', true)) !== false;
-  const rate = Number(await getSetting('playbackRate', 1));
+  state.device = await getDevice();
+  renderDeviceLine();
+
+  player.backSeconds = Number(await getSetting('backSeconds', await getSetting('skipSeconds', DEFAULTS.backSeconds)));
+  player.forwardSeconds = Number(await getSetting('forwardSeconds', await getSetting('skipSeconds', DEFAULTS.forwardSeconds)));
+  player.autoAdvance = (await getSetting('autoAdvance', DEFAULTS.autoAdvance)) === true;
+  const rate = Number(await getSetting('playbackRate', DEFAULTS.playbackRate));
   player.setRate(rate);
-  const repeat = await getSetting('repeat', '1');
+  const repeat = await getSetting('repeat', DEFAULTS.repeat);
   player.setRepeat(parseRepeat(repeat));
-  player.setBreakSeconds(Number(await getSetting('breakSeconds', 0)));
-  setControl('#repeat', String(repeat));
-  setControl('#break-seconds', String(player.breakSeconds));
-  setControl('#rate', String(rate));
-  setControl('#back-seconds', String(player.backSeconds));
-  setControl('#forward-seconds', String(player.forwardSeconds));
-  setControl('#sleep-minutes', '0');
-  setControl('#auto-advance', player.autoAdvance, 'checked');
-  updateSkipLabels();
+  player.setBreakSeconds(Number(await getSetting('breakSeconds', DEFAULTS.breakSeconds)));
+  syncControls();
   wireEvents();
   applyPlatformCapabilities();
   player.onChange(renderPlayerState);
@@ -147,6 +155,69 @@ function setControl(selector, value, property = 'value') {
 function on(selector, type, handler) {
   const element = $(selector);
   if (element) element.addEventListener(type, handler);
+}
+
+/** Mirrors the player's current settings onto the controls. */
+function syncControls() {
+  const repeat = player.repeatTarget === Infinity ? 'inf' : String(player.repeatTarget);
+  setControl('#repeat', repeat);
+  setControl('#break-seconds', String(player.breakSeconds));
+  setControl('#rate', String(player.audio.playbackRate));
+  setControl('#back-seconds', String(player.backSeconds));
+  setControl('#forward-seconds', String(player.forwardSeconds));
+  setControl('#sleep-minutes', String(player.sleepMinutes || 0));
+  setControl('#auto-advance', player.autoAdvance, 'checked');
+  updateSkipLabels();
+}
+
+/** Puts every playback control back to its default. */
+async function resetControls() {
+  player.setRepeat(parseRepeat(DEFAULTS.repeat));
+  player.setBreakSeconds(DEFAULTS.breakSeconds);
+  player.setBackSeconds(DEFAULTS.backSeconds);
+  player.setForwardSeconds(DEFAULTS.forwardSeconds);
+  player.setRate(DEFAULTS.playbackRate);
+  player.setSleepMinutes(DEFAULTS.sleepMinutes);
+  player.autoAdvance = DEFAULTS.autoAdvance;
+
+  await Promise.all([
+    setSetting('repeat', DEFAULTS.repeat),
+    setSetting('breakSeconds', DEFAULTS.breakSeconds),
+    setSetting('backSeconds', DEFAULTS.backSeconds),
+    setSetting('forwardSeconds', DEFAULTS.forwardSeconds),
+    setSetting('playbackRate', DEFAULTS.playbackRate),
+    setSetting('autoAdvance', DEFAULTS.autoAdvance),
+  ]);
+
+  syncControls();
+  toast(t('toast.controlsReset'));
+}
+
+/** The device line mixes text and a highlighted name, so it is built here. */
+function renderDeviceLine() {
+  const line = $('#device-line');
+  if (!line) return;
+  line.innerHTML = t('welcome.deviceLine', { device: escapeHtml(state.device.name) });
+}
+
+/** Re-renders everything that holds translated text. */
+async function applyLanguage(code) {
+  setLanguage(code);
+  await setSetting('language', code);
+  translateDocument();
+  renderDeviceLine();
+  for (const button of document.querySelectorAll('#language-toggle .segment')) {
+    button.classList.toggle('is-active', button.dataset.lang === code);
+  }
+  updateSkipLabels();
+  updateCoverPreview();
+  await renderLibrary();
+  await refreshStorageLine();
+  if (state.course) {
+    renderTracks();
+    renderCourseSummary();
+  }
+  renderPlayerState(player.snapshot());
 }
 
 /** The repeat menu stores "inf" for endless looping, otherwise a count. */
@@ -208,7 +279,7 @@ async function renderLibrary() {
         </div>
         <div>
           <div class="progress-bar"><span style="width:${percent}%"></span></div>
-          <p style="margin-top:8px">${counts.played} of ${counts.total} played</p>
+          <p style="margin-top:8px">${escapeHtml(t('course.playedCount', { played: counts.played, total: counts.total }))}</p>
         </div>
       </div>`;
     if (url) {
@@ -219,7 +290,8 @@ async function renderLibrary() {
       card.prepend(image);
     }
     card.querySelector('h3').textContent = course.title;
-    card.querySelector('p').textContent = course.subtitle || formatDuration(counts.totalSeconds) || `${counts.total} lessons`;
+    card.querySelector('p').textContent = course.subtitle || formatDuration(counts.totalSeconds) ||
+      t('course.lessons', { count: counts.total });
     card.addEventListener('click', () => openCourse(course.id));
     grid.appendChild(card);
   }
@@ -229,13 +301,14 @@ async function refreshStorageLine() {
   const estimate = await storageEstimate();
   const line = $('#storage-line');
   if (!estimate?.usage) {
-    line.textContent = 'Audio is stored on this device.';
+    line.textContent = t('welcome.storagePlain');
     return;
   }
   const persisted = await navigator.storage?.persisted?.().catch(() => false);
-  line.textContent = `${formatBytes(estimate.usage)} stored on this device` +
-    (estimate.quota ? ` of about ${formatBytes(estimate.quota)} available` : '') +
-    (persisted ? ' · protected from cleanup' : '');
+  line.textContent = t('welcome.storage', {
+    used: formatBytes(estimate.usage),
+    quota: estimate.quota ? formatBytes(estimate.quota) : '—',
+  }) + (persisted ? t('welcome.storageProtected') : '');
 }
 
 /* ====================================================================== */
@@ -288,8 +361,9 @@ function renderCourseSummary() {
   const percent = total ? Math.round((played / total) * 100) : 0;
   $('#course-progress-fill').style.width = `${percent}%`;
   $('#course-progress-text').textContent = total
-    ? `${played} of ${total} lessons played on ${state.device.name}${seconds ? ` · ${formatDuration(seconds)} total` : ''}`
-    : 'No audio loaded yet.';
+    ? t('course.progress', { played, total, device: state.device.name }) +
+      (seconds ? t('course.progressTotal', { duration: formatDuration(seconds) }) : '')
+    : t('course.noAudio');
   $('#empty-course').classList.toggle('hidden', total > 0);
 }
 
@@ -324,7 +398,7 @@ function renderTracks() {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'played-toggle';
-    toggle.title = progress?.played ? 'Mark as not played' : 'Mark as played';
+    toggle.title = progress?.played ? t('aria.markNotPlayed') : t('aria.markPlayed');
     toggle.setAttribute('aria-label', toggle.title);
     toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     toggle.addEventListener('click', () => togglePlayed(track));
@@ -332,7 +406,7 @@ function renderTracks() {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'track-delete';
-    remove.setAttribute('aria-label', `Remove ${track.title}`);
+    remove.setAttribute('aria-label', t('aria.removeTrack', { title: track.title }));
     remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7Zm3-3h6l1 2H8l1-2Z"/></svg>';
     remove.addEventListener('click', () => removeTrack(track));
 
@@ -346,9 +420,11 @@ function trackMeta(track, progress) {
   if (track.duration) bits.push(formatTime(track.duration));
   else bits.push(formatBytes(track.size));
   if (progress?.played) {
-    bits.push(progress.playCount > 1 ? `played ${progress.playCount}×` : 'played');
+    bits.push(progress.playCount > 1
+      ? t('meta.playedTimes', { count: progress.playCount })
+      : t('meta.played'));
   } else if (progress?.position > 5) {
-    bits.push(`resume at ${formatTime(progress.position)}`);
+    bits.push(t('meta.resumeAt', { time: formatTime(progress.position) }));
   }
   if (progress?.lastPlayedAt) bits.push(relativeDate(progress.lastPlayedAt));
   return bits.join(' · ');
@@ -368,12 +444,12 @@ async function togglePlayed(track) {
 }
 
 async function removeTrack(track) {
-  if (!confirm(`Remove "${track.title}" from this device?`)) return;
+  if (!confirm(t('confirm.removeTrack', { title: track.title }))) return;
   if (player.currentTrack?.id === track.id) player.unload();
   await deleteTrack(track.id);
   await refreshTracks();
   await refreshStorageLine();
-  toast('Lesson removed.');
+  toast(t('toast.trackRemoved'));
 }
 
 /* ====================================================================== */
@@ -385,12 +461,12 @@ async function playTrack(index) {
     await player.load(index, { autoplay: true, resume: true });
     navigate('player');
   } catch (error) {
-    toast(error.message || 'Could not play this file.');
+    toast(error.message || t('toast.importFailed'));
   }
 }
 
 async function continueWhereLeftOff() {
-  if (!state.tracks.length) return toast('Add some audio first.');
+  if (!state.tracks.length) return toast(t('toast.addFilesFirst'));
   let target = state.tracks.findIndex((track) => {
     const progress = state.progress.get(track.id);
     return progress && !progress.played && progress.position > 5;
@@ -407,17 +483,17 @@ function renderPlayerState(snapshot, extra) {
   const pauseIcons = document.querySelectorAll('#btn-play .icon-pause, #mini-play .icon-pause');
   playIcons.forEach((icon) => icon.classList.toggle('hidden', playing));
   pauseIcons.forEach((icon) => icon.classList.toggle('hidden', !playing));
-  $('#btn-play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('#btn-play').setAttribute('aria-label', playing ? t('aria.pause') : t('aria.play'));
 
   const disabled = !track;
   for (const id of ['#btn-back', '#btn-forward', '#btn-stop', '#btn-prev', '#btn-next']) {
     $(id).disabled = disabled;
   }
 
-  $('#player-title').textContent = track ? track.title : 'Nothing playing';
+  $('#player-title').textContent = track ? track.title : t('player.nothing');
   $('#player-position-label').textContent = track
-    ? `Lesson ${index + 1} of ${total}${state.course ? ` · ${state.course.title}` : ''}`
-    : 'Pick a lesson to begin';
+    ? t('player.lessonOf', { index: index + 1, total }) + (state.course ? ` · ${state.course.title}` : '')
+    : t('player.pickLesson');
 
   const badge = $('#repeat-badge');
   const { repeatTarget, repeatPass, breaking, breakRemaining } = snapshot;
@@ -427,11 +503,11 @@ function renderPlayerState(snapshot, extra) {
     badge.classList.toggle('is-break', Boolean(breaking));
     if (showBadge) {
       if (breaking) {
-        badge.textContent = `Break · next play in ${breakRemaining}s`;
+        badge.textContent = t('player.breakIn', { seconds: breakRemaining });
       } else {
         badge.textContent = repeatTarget === Infinity
-          ? `Repeating · play ${repeatPass}`
-          : `Play ${repeatPass} of ${repeatTarget}`;
+          ? t('player.repeating', { pass: repeatPass })
+          : t('player.playOf', { pass: repeatPass, total: repeatTarget });
       }
     }
   }
@@ -441,7 +517,7 @@ function renderPlayerState(snapshot, extra) {
   if (sleepBadge) {
     sleepBadge.classList.toggle('hidden', !showSleep);
     if (showSleep) {
-      sleepBadge.textContent = `Sleep in ${formatTime(snapshot.sleepRemainingMs / 1000)}`;
+      sleepBadge.textContent = t('player.sleepIn', { time: formatTime(snapshot.sleepRemainingMs / 1000) });
     }
   }
 
@@ -453,11 +529,11 @@ function renderPlayerState(snapshot, extra) {
 
   updateMiniPlayer(snapshot);
 
-  if (extra?.loadError) toast(extra.loadError);
+  if (extra?.loadError) toast(t('toast.playFailed', { title: player.currentTrack?.title || '' }));
   if (extra?.sleepFired) {
     setControl('#sleep-minutes', '0');
     $('#sleep-badge')?.classList.add('hidden');
-    toast('Sleep timer finished — playback stopped.');
+    toast(t('toast.sleepFired'));
   }
 
   if (extra?.playedChanged) {
@@ -493,18 +569,18 @@ function updateMiniPlayer(snapshot = player.snapshot()) {
 
 async function handleFiles(fileList) {
   if (!state.course || !fileList?.length) return;
-  showBusy('Copying audio to this device…', 0);
+  showBusy(t('toast.copyingTitle'), 0);
   try {
     const result = await importFiles(state.course.id, fileList, ({ processed, total, name }) => {
-      showBusy(`Copying ${name}`, total ? processed / total : 0);
+      showBusy(t('toast.copying', { name }), total ? processed / total : 0);
     });
     await refreshTracks();
     await refreshStorageLine();
     hideBusy();
 
-    if (!result.considered) toast('No audio files found in that selection.');
-    else if (!result.added.length) toast('Those files are already on this device.');
-    else toast(`Added ${result.added.length} lesson${result.added.length === 1 ? '' : 's'}.`);
+    if (!result.considered) toast(t('toast.noAudioFound'));
+    else if (!result.added.length) toast(t('toast.alreadyAdded'));
+    else toast(result.added.length === 1 ? t('toast.addedOne') : t('toast.added', { count: result.added.length }));
 
     if (result.added.length) {
       probeDurations(result.added, getTrackBlob, () => {}).then(async () => {
@@ -514,7 +590,7 @@ async function handleFiles(fileList) {
     }
   } catch (error) {
     hideBusy();
-    toast(error.message || 'Import failed.');
+    toast(error.message || t('toast.importFailed'));
   }
 }
 
@@ -585,9 +661,9 @@ function wireEvents() {
     player.setRepeat(parseRepeat(raw));
     setSetting('repeat', raw);
     const target = parseRepeat(raw);
-    toast(target === Infinity ? 'This lesson will repeat until you stop it.'
-      : target === 1 ? 'Repeat off.'
-      : `This lesson will play ${target} times in a row.`);
+    toast(target === Infinity ? t('toast.repeatInf')
+      : target === 1 ? t('toast.repeatOff')
+      : t('toast.repeatTimes', { count: target }));
   });
   on('#back-seconds', 'change', (event) => {
     const value = Number(event.target.value);
@@ -605,18 +681,21 @@ function wireEvents() {
     const value = Number(event.target.value);
     player.setBreakSeconds(value);
     setSetting('breakSeconds', value);
-    toast(value ? `${value} second break between repeats.` : 'No break between repeats.');
+    toast(value ? t('toast.breakOn', { seconds: value }) : t('toast.breakOff'));
   });
   on('#sleep-minutes', 'change', (event) => {
     const value = Number(event.target.value);
     player.setSleepMinutes(value);
-    toast(value
-      ? `Playback will fade out and stop in ${value} minutes.`
-      : 'Sleep timer switched off.');
+    toast(value ? t('toast.sleepOn', { minutes: value }) : t('toast.sleepOff'));
   });
-  $('#auto-advance').addEventListener('change', (event) => {
+  on('#auto-advance', 'change', (event) => {
     player.autoAdvance = event.target.checked;
     setSetting('autoAdvance', event.target.checked);
+  });
+  on('#btn-reset-controls', 'click', resetControls);
+  on('#language-toggle', 'click', (event) => {
+    const button = event.target.closest('.segment');
+    if (button) applyLanguage(button.dataset.lang);
   });
 
   /* --- keyboard shortcuts (PC) --- */
@@ -654,7 +733,7 @@ function wireEvents() {
       state.pendingCover = await prepareCover(file);
       updateCoverPreview();
     } catch (error) {
-      toast(error.message || 'That picture could not be used.');
+      toast(error.message || t('toast.pictureFailed'));
     }
   });
 
@@ -671,13 +750,13 @@ function wireEvents() {
       await updateCourse(editingId, { title, subtitle });
       await applyPendingCover(editingId, pendingCover);
       if (state.course?.id === editingId) await openCourse(editingId, { navigate: false });
-      toast(pendingCover ? 'Course updated.' : 'Course renamed.');
+      toast(pendingCover ? t('toast.courseUpdated') : t('toast.courseRenamed'));
     } else {
       const course = await createCourse({ title, subtitle });
       await applyPendingCover(course.id, pendingCover);
       await renderLibrary();
       await openCourse(course.id);
-      toast('Now add the MP3 files for this language.');
+      toast(t('toast.nowAddFiles'));
       return;
     }
     await renderLibrary();
@@ -690,16 +769,16 @@ function wireEvents() {
   });
   $('#btn-mark-all-unplayed').addEventListener('click', async () => {
     if (!state.course) return;
-    if (!confirm(`Reset listening progress for "${state.course.title}" on ${state.device.name}?`)) return;
+    if (!confirm(t('confirm.resetProgress', { title: state.course.title, device: state.device.name }))) return;
     await resetCourseProgress(state.course.id);
     $('#dlg-course-menu').close();
     await refreshTracks();
     await renderLibrary();
-    toast('Progress reset on this device.');
+    toast(t('toast.progressReset'));
   });
   $('#btn-delete-course').addEventListener('click', async () => {
     if (!state.course) return;
-    if (!confirm(`Delete "${state.course.title}" and all of its audio from this device?`)) return;
+    if (!confirm(t('confirm.deleteCourse', { title: state.course.title }))) return;
     player.unload();
     const deletedId = state.course.id;
     await deleteCourse(deletedId);
@@ -710,7 +789,7 @@ function wireEvents() {
     await renderLibrary();
     await refreshStorageLine();
     navigate('welcome');
-    toast('Course deleted.');
+    toast(t('toast.courseDeleted'));
   });
 
   /* --- settings --- */
@@ -719,14 +798,13 @@ function wireEvents() {
     if (name && name !== state.device.name) {
       await setDeviceName(name);
       state.device = await getDevice();
-      $('#device-name-label').textContent = state.device.name;
+      renderDeviceLine();
       renderCourseSummary();
     }
   });
   $('#btn-persist').addEventListener('click', async () => {
     const granted = await requestPersistentStorage();
-    toast(granted ? 'Offline files are protected from cleanup.'
-      : 'The browser did not grant protected storage. Install the app to improve the odds.');
+    toast(granted ? t('toast.protectedOk') : t('toast.protectedNo'));
     await refreshStorageLine();
     await fillSettingsStorage();
   });
@@ -751,14 +829,14 @@ function updateSkipLabels() {
   for (const label of document.querySelectorAll('[data-forward-label]')) {
     label.textContent = String(player.forwardSeconds);
   }
-  $('#btn-back')?.setAttribute('aria-label', `Skip back ${player.backSeconds} seconds`);
-  $('#btn-forward')?.setAttribute('aria-label', `Skip forward ${player.forwardSeconds} seconds`);
+  $('#btn-back')?.setAttribute('aria-label', t('aria.skipBack', { seconds: player.backSeconds }));
+  $('#btn-forward')?.setAttribute('aria-label', t('aria.skipForward', { seconds: player.forwardSeconds }));
 }
 
 async function openCourseDialog(course = null) {
   const dialog = $('#dlg-course');
   dialog.dataset.editing = course?.id || '';
-  $('#dlg-course-heading').textContent = course ? 'Edit language' : 'Add a language';
+  $('#dlg-course-heading').textContent = course ? t('dialog.editLanguage') : t('dialog.addLanguage');
   $('#course-title-input').value = course?.title || '';
   $('#course-subtitle-input').value = course?.subtitle || '';
   $('#title-suggestions').classList.toggle('hidden', Boolean(course));
@@ -777,6 +855,7 @@ async function openCourseDialog(course = null) {
 function updateCoverPreview() {
   const dialog = $('#dlg-course');
   const preview = $('#cover-preview');
+  if (!dialog || !preview) return;
   const letter = initials($('#course-title-input').value || 'A');
 
   if (preview.dataset.tempUrl) {
@@ -793,7 +872,7 @@ function updateCoverPreview() {
   }
 
   paintCover(preview, url, letter);
-  $('#btn-choose-cover').textContent = url ? 'Change picture' : 'Choose picture';
+  $('#btn-choose-cover').textContent = url ? t('dialog.changePicture') : t('dialog.choosePicture');
   $('#btn-remove-cover').classList.toggle('hidden', !url);
 }
 
@@ -806,6 +885,9 @@ async function applyPendingCover(courseId, pendingCover) {
 
 async function openSettings() {
   $('#device-name-input').value = state.device.name;
+  for (const button of document.querySelectorAll('#language-toggle .segment')) {
+    button.classList.toggle('is-active', button.dataset.lang === getLanguage());
+  }
   await fillSettingsStorage();
   $('#dlg-settings').showModal();
 }
@@ -814,8 +896,10 @@ async function fillSettingsStorage() {
   const estimate = await storageEstimate();
   const persisted = await navigator.storage?.persisted?.().catch(() => false);
   $('#settings-storage').textContent = estimate?.usage
-    ? `Using ${formatBytes(estimate.usage)}${estimate.quota ? ` of ~${formatBytes(estimate.quota)}` : ''}. ` +
-      (persisted ? 'Storage is protected.' : 'Storage is not yet protected.')
+    ? t('settings.usage', {
+      used: formatBytes(estimate.usage),
+      quota: estimate.quota ? t('settings.usageOf', { quota: formatBytes(estimate.quota) }) : '',
+    }) + (persisted ? t('settings.protectedYes') : t('settings.protectedNo'))
     : '';
 }
 
@@ -845,7 +929,7 @@ async function exportReport() {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  toast('Listening report saved.');
+  toast(t('toast.reportSaved'));
 }
 
 /* ====================================================================== */
@@ -899,9 +983,9 @@ function formatBytes(bytes) {
 
 function relativeDate(timestamp) {
   const days = Math.floor((Date.now() - timestamp) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days} days ago`;
+  if (days <= 0) return t('date.today');
+  if (days === 1) return t('date.yesterday');
+  if (days < 30) return t('date.daysAgo', { count: days });
   return new Date(timestamp).toLocaleDateString();
 }
 

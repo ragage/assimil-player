@@ -515,6 +515,52 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: none;
 .switch input { width: 16px; height: 16px; accent-color: var(--accent); }
 .secondary-transport .ghost-btn { padding: 9px 12px; }
 
+/* Stop is deliberately the loudest control: full width and red, so it can be
+   found quickly without reading the screen. */
+.stop-btn {
+  grid-column: 1 / -1;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 18px;
+  font-weight: 700;
+  font-size: .95rem;
+  letter-spacing: .02em;
+}
+.stop-btn:active { transform: scale(.98); filter: brightness(.92); }
+.stop-btn:disabled { opacity: .45; }
+
+/* Segmented language chooser in the settings dialog. */
+.field-label {
+  margin: 0 0 6px;
+  font-size: .84rem;
+  color: var(--muted);
+}
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  margin-bottom: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.segment {
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 8px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.segment.is-active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* ------------------------------ mini player ---------------------------- */
 
 .mini-player {

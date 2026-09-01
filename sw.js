@@ -4,7 +4,7 @@
  * live in IndexedDB, which is where the import step puts them.
  */
 
-const CACHE = 'assimil-player-v7';
+const CACHE = 'assimil-player-v8';
 
 const SHELL = [
   './',
@@ -15,6 +15,7 @@ const SHELL = [
   'js/player.js',
   'js/import.js',
   'js/image.js',
+  'js/i18n.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',

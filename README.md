@@ -22,6 +22,11 @@ codebase:
 
 ## Features
 
+**Two languages** — the interface is available in English and French, chosen
+from **Settings**. It follows the device's own language on first run, and your
+course titles and lesson names are never translated. Everything else — the
+audio, the covers and the listening history — is untouched by the choice.
+
 **Welcome screen** — pick which language to listen to. Each course shows its
 cover picture, a progress bar and how many lessons have been played on this
 device.
@@ -53,7 +58,10 @@ as a few tens of kilobytes and leaves the space for your audio.
   bed. Playback fades out gently and stops on its own, so you do not have to
   find the phone. The player shows the time remaining, and the timer always
   starts fresh — it is never left switched on from the night before.
-- Auto-advance to the next lesson, which can be switched off
+- Auto-advance to the next lesson, off by default so a session ends where you
+  expect; switch it on to play a whole volume through
+- **Reset** puts every playback control back to its default in one tap, and
+  **Stop** is deliberately red and full width so it is easy to find
 - Playback continues while the phone is locked or you use another app, with
   controls on the lock screen
 - Resumes an unfinished lesson exactly where it was left
@@ -154,6 +162,7 @@ js/db.js                 IndexedDB: courses, tracks, audio blobs, covers, progre
 js/player.js             Audio engine and transport controls
 js/import.js             File import, natural sort, duration probing
 js/image.js              Cover pictures: decode, downscale, re-encode
+js/i18n.js               English and French interface strings
 icons/                   App icons
 tools/generate-icons.js  Regenerates the icons (node tools/generate-icons.js)
 tools/devserver.py       Local no-cache server for development
